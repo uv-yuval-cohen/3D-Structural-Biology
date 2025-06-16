@@ -38,8 +38,8 @@ def simple_score(p_train, n_train, p_test, n_test):
 if __name__ == '__main__':
 
     # TODO: play with these parameters
-    chosen_embedding_size = 1280  # ESM embedding dim (320-5120)
-    chosen_embedding_layer = 33  # which transformer layer to take
+    chosen_embedding_size = 2560  # ESM embedding dim (320-5120)
+    chosen_embedding_layer = 9  # which transformer layer to take
     chosen_test_size = 0.15  # train/test split
 
     # Load all the peptide data
@@ -98,8 +98,8 @@ if __name__ == '__main__':
     # Train a simple neural network
     print("Training a neural network on the training set")
     # TODO: Select parameters for the network
-    batch_size = 16
-    epochs = 50
+    batch_size = 128
+    epochs = 41
     lr = 5e-4
     hidden_dim = 128
     dropout = 0.2
