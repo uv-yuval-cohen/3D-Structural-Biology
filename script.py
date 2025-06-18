@@ -148,10 +148,8 @@ def get_peptide_predictions(peptide_embeddings, trained_model):
 
 def get_protein_level_predictions(peptide_embeddings_with_predictions):
     """
-    **MODIFIED** - Get protein-level predictions using 3-label hierarchy.
-    - Protein = 1: If ANY peptide is labeled 1 (confident positive)
-    - Protein = 0: If NO peptides are 1, but ANY peptide is labeled 0 (uncertain)
-    - Protein = -1: If ALL peptides are labeled -1 (confident negative)
+    protein-level predictions for large datasets.
+    Single pass through peptides per protein.
     """
     print("Aggregating peptide predictions to protein level...")
 
@@ -159,38 +157,55 @@ def get_protein_level_predictions(peptide_embeddings_with_predictions):
     protein_predictions = {}
 
     for protein_id, peptides in protein_groups.items():
-        # Count each label type
-        positive_peptides = [p for p in peptides if p["predicted_label"] == 1]
-        uncertain_peptides = [p for p in peptides if p["predicted_label"] == 0]
-        negative_peptides = [p for p in peptides if p["predicted_label"] == -1]
+        # Single pass through peptides - much more efficient!
+        num_positive = 0
+        num_uncertain = 0
+        num_negative = 0
+        max_score = float('-inf')
+        score_sum = 0.0
 
-        # Hierarchical classification
-        if len(positive_peptides) > 0:
+        for peptide in peptides:
+            # Count labels
+            label = peptide["predicted_label"]
+            if label == 1:
+                num_positive += 1
+            elif label == 0:
+                num_uncertain += 1
+            else:  # label == -1
+                num_negative += 1
+
+            # Track max and sum for mean in same pass
+            score = peptide["prediction_score"]
+            if score > max_score:
+                max_score = score
+            score_sum += score
+
+        # Determine protein label using counts (no list checks needed)
+        if num_positive > 0:
             protein_label = 1
-        elif len(uncertain_peptides) > 0:
+        elif num_uncertain > 0:
             protein_label = 0
         else:
             protein_label = -1
 
-        max_score = max(p["prediction_score"] for p in peptides)
-        mean_score = np.mean([p["prediction_score"] for p in peptides])
+        mean_score = score_sum / len(peptides)
 
         protein_predictions[protein_id] = {
             "predicted_label": protein_label,
             "max_peptide_score": float(max_score),
             "mean_peptide_score": float(mean_score),
             "num_peptides": len(peptides),
-            "num_positive_peptides": len(positive_peptides),
-            "num_uncertain_peptides": len(uncertain_peptides),
-            "num_negative_peptides": len(negative_peptides),
-            "positive_peptide_ratio": len(positive_peptides) / len(peptides)
+            "num_positive_peptides": num_positive,
+            "num_uncertain_peptides": num_uncertain,
+            "num_negative_peptides": num_negative,
+            "positive_peptide_ratio": num_positive / len(peptides)
         }
 
     print(f"✅ Protein-level predictions completed for {len(protein_predictions)} proteins!")
-    return protein_predictions
+    return protein_predictions, protein_groups
 
 
-def get_nes_positional_info(peptide_embeddings_with_predictions, protein_predictions):
+def get_nes_positional_info(protein_predictions, protein_groups):
     """
     **NEW FUNCTION** - Extract NES positional information for positive proteins.
 
@@ -203,7 +218,6 @@ def get_nes_positional_info(peptide_embeddings_with_predictions, protein_predict
     """
     print("Extracting NES positional information...")
 
-    protein_groups = group_peptides_by_protein(peptide_embeddings_with_predictions)
     nes_positions = {}
 
     for protein_id, pred_info in protein_predictions.items():
@@ -259,10 +273,10 @@ def full_prediction_pipeline(all_peptides, trained_model, embedding_size=2560, e
     peptide_predictions = get_peptide_predictions(peptide_embeddings, trained_model)
 
     # Step 3: Aggregate to protein-level predictions
-    protein_predictions = get_protein_level_predictions(peptide_predictions)
+    protein_predictions, protein_groups = get_protein_level_predictions(peptide_predictions)
 
     print("🎉 Full pipeline completed!")
-    return peptide_predictions, protein_predictions
+    return peptide_predictions, protein_predictions, protein_groups
 
 
 def calculate_peptide_accuracy(peptide_embeddings_with_predictions):
@@ -352,8 +366,7 @@ if __name__ == "__main__":
     trained_model.eval()  # Set to evaluation mode
     print("✅ Model loaded successfully!")
 
-
-    peptide_predictions, protein_predictions = full_prediction_pipeline(
+    peptide_predictions, protein_predictions, protein_groups = full_prediction_pipeline(
         all_peptides,
         trained_model,
         embedding_size=2560,
@@ -369,7 +382,7 @@ if __name__ == "__main__":
     protein_accuracy = calculate_protein_accuracy(protein_predictions, all_peptides)
 
     # Get NES positional information
-    nes_positions = get_nes_positional_info(peptide_predictions, protein_predictions)
+    nes_positions = get_nes_positional_info(protein_predictions, protein_groups)
 
     # Print example results
     print(f"\nExample peptide prediction:")
