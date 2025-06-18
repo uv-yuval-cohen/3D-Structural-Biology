@@ -1,10 +1,10 @@
 import numpy as np
 from esm_embeddings import get_esm_embeddings, get_esm_model
 
-UPPER_THRESHOLD = 1
-LOWER_THRESHOLD = -1
+UPPER_THRESHOLD = 1 # default upper threshold for positive predictions
+LOWER_THRESHOLD = -1 # default lower threshold for negative predictions
 
-def get_peptide_embeddings_with_protein_info(all_peptides, embedding_size=2560, embedding_layer=33):
+def get_peptide_embeddings_with_protein_info(all_peptides, embedding_size=2560, embedding_layer=9):
     """
     Get ESM embeddings for peptides while maintaining protein connection.
 
@@ -74,6 +74,37 @@ def group_peptides_by_protein(peptide_embeddings):
     return protein_groups
 
 
+def find_best_thresholds(prediction_scores, true_labels):
+    """
+    Find optimal thresholds using ROC curve analysis.
+    Finds the point that maximizes TPR while minimizing FPR (Youden's Index).
+
+    Args:
+        prediction_scores: Array of model prediction scores
+        true_labels: Array of true labels (0 or 1)
+
+    Returns:
+        Tuple: (upper_threshold, lower_threshold)
+    """
+    from sklearn.metrics import roc_curve
+
+    # Calculate ROC curve
+    fpr, tpr, thresholds = roc_curve(true_labels, prediction_scores)
+
+    # Find optimal threshold using Youden's Index (TPR - FPR)
+    youdens_index = tpr - fpr
+    optimal_idx = np.argmax(youdens_index)
+    optimal_threshold = thresholds[optimal_idx]
+
+    print(f"Optimal threshold: {optimal_threshold:.3f} (TPR: {tpr[optimal_idx]:.3f}, FPR: {fpr[optimal_idx]:.3f})")
+
+    # You can adjust these based on your needs
+    upper_threshold = optimal_threshold
+    lower_threshold = -optimal_threshold
+
+    return upper_threshold, lower_threshold
+
+
 def get_peptide_predictions(peptide_embeddings, trained_model):
     """
     **NEW FUNCTION** - Get predictions for all peptides efficiently using batch processing.
@@ -95,11 +126,17 @@ def get_peptide_predictions(peptide_embeddings, trained_model):
     # Single batch inference - much faster than individual predictions!
     peptide_scores = get_net_scores(trained_model, embeddings_only)
 
+    # Extract true labels for threshold optimization
+    true_labels = [p["label"] for p in peptide_embeddings]
+
+    # Find optimal thresholds
+    UPPER_THRESHOLD, LOWER_THRESHOLD = find_best_thresholds(peptide_scores, true_labels)
+
     # Map predictions back using indices (same principle as embedding mapping)
     for i, score in enumerate(peptide_scores):
         peptide_embeddings[i]["prediction_score"] = float(score)  # Convert to Python float
         if score > UPPER_THRESHOLD:
-            peptide_embeddings[i]["predicted_label"] = 1 # positive 
+            peptide_embeddings[i]["predicted_label"] = 1 # positive
         elif score < LOWER_THRESHOLD:
             peptide_embeddings[i]["predicted_label"] = -1 # negative
         else:
@@ -111,40 +148,92 @@ def get_peptide_predictions(peptide_embeddings, trained_model):
 
 def get_protein_level_predictions(peptide_embeddings_with_predictions):
     """
-    **MODIFIED** - Get protein-level predictions from peptide predictions.
-    If ANY peptide in a protein is predicted as positive (label=1),
-    then the entire protein is classified as positive.
-
-    Args:
-        peptide_embeddings_with_predictions: Output from get_peptide_predictions()
-
-    Returns:
-        Dict mapping protein_id to protein-level prediction
+    **MODIFIED** - Get protein-level predictions using 3-label hierarchy.
+    - Protein = 1: If ANY peptide is labeled 1 (confident positive)
+    - Protein = 0: If NO peptides are 1, but ANY peptide is labeled 0 (uncertain)
+    - Protein = -1: If ALL peptides are labeled -1 (confident negative)
     """
     print("Aggregating peptide predictions to protein level...")
 
-    # Group by protein and aggregate
     protein_groups = group_peptides_by_protein(peptide_embeddings_with_predictions)
     protein_predictions = {}
 
     for protein_id, peptides in protein_groups.items():
-        # If ANY peptide is positive, protein is positive
-        has_positive_peptide = any(p["predicted_label"] == 1 for p in peptides)
+        # Count each label type
+        positive_peptides = [p for p in peptides if p["predicted_label"] == 1]
+        uncertain_peptides = [p for p in peptides if p["predicted_label"] == 0]
+        negative_peptides = [p for p in peptides if p["predicted_label"] == -1]
+
+        # Hierarchical classification
+        if len(positive_peptides) > 0:
+            protein_label = 1
+        elif len(uncertain_peptides) > 0:
+            protein_label = 0
+        else:
+            protein_label = -1
+
         max_score = max(p["prediction_score"] for p in peptides)
         mean_score = np.mean([p["prediction_score"] for p in peptides])
 
         protein_predictions[protein_id] = {
-            "predicted_label": 1 if has_positive_peptide else 0,
+            "predicted_label": protein_label,
             "max_peptide_score": float(max_score),
-            "mean_peptide_score": float(mean_score),  # NEW: Average score
+            "mean_peptide_score": float(mean_score),
             "num_peptides": len(peptides),
-            "num_positive_peptides": sum(p["predicted_label"] for p in peptides),
-            "positive_peptide_ratio": sum(p["predicted_label"] for p in peptides) / len(peptides)  # NEW
+            "num_positive_peptides": len(positive_peptides),
+            "num_uncertain_peptides": len(uncertain_peptides),
+            "num_negative_peptides": len(negative_peptides),
+            "positive_peptide_ratio": len(positive_peptides) / len(peptides)
         }
 
     print(f"✅ Protein-level predictions completed for {len(protein_predictions)} proteins!")
     return protein_predictions
 
+
+def get_nes_positional_info(peptide_embeddings_with_predictions, protein_predictions):
+    """
+    **NEW FUNCTION** - Extract NES positional information for positive proteins.
+
+    Args:
+        peptide_embeddings_with_predictions: Output from get_peptide_predictions()
+        protein_predictions: Output from get_protein_level_predictions()
+
+    Returns:
+        Dict mapping protein_id to NES location information
+    """
+    print("Extracting NES positional information...")
+
+    protein_groups = group_peptides_by_protein(peptide_embeddings_with_predictions)
+    nes_positions = {}
+
+    for protein_id, pred_info in protein_predictions.items():
+        if pred_info["predicted_label"] == 1:  # Only for positive proteins
+            peptides = protein_groups[protein_id]
+            positive_peptides = [p for p in peptides if p["predicted_label"] == 1]
+
+            # Extract positions of all positive peptides
+            nes_regions = []
+            for peptide in positive_peptides:
+                nes_regions.append({
+                    "start_pos": peptide["start_pos"],
+                    "end_pos": peptide["end_pos"],
+                    "sequence": peptide.get("peptide_sequence", ""),  # If available
+                    "score": peptide["prediction_score"]
+                })
+
+            # Sort by start position
+            nes_regions.sort(key=lambda x: x["start_pos"])
+
+            nes_positions[protein_id] = {
+                "num_nes_regions": len(nes_regions),
+                "nes_regions": nes_regions,
+                "earliest_start": min(r["start_pos"] for r in nes_regions),
+                "latest_end": max(r["end_pos"] for r in nes_regions),
+                "highest_score": max(r["score"] for r in nes_regions)
+            }
+
+    print(f"✅ Found NES positions for {len(nes_positions)} positive proteins!")
+    return nes_positions
 
 def full_prediction_pipeline(all_peptides, trained_model, embedding_size=2560, embedding_layer=9):
     """
@@ -175,6 +264,71 @@ def full_prediction_pipeline(all_peptides, trained_model, embedding_size=2560, e
     print("🎉 Full pipeline completed!")
     return peptide_predictions, protein_predictions
 
+
+def calculate_peptide_accuracy(peptide_embeddings_with_predictions):
+    """
+    **NEW FUNCTION** - Calculate peptide-level accuracy metrics.
+    """
+    from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+
+    true_labels = [p["label"] for p in peptide_embeddings_with_predictions]
+    predicted_labels = [p["predicted_label"] for p in peptide_embeddings_with_predictions]
+
+    accuracy = accuracy_score(true_labels, predicted_labels)
+
+    print(f"\n📊 PEPTIDE-LEVEL ACCURACY:")
+    print(f"Overall Accuracy: {accuracy:.3f}")
+    print(f"Classification Report:")
+    print(classification_report(true_labels, predicted_labels,
+                                target_names=['Negative', 'Uncertain', 'Positive']))
+    print(f"Confusion Matrix:")
+    print(confusion_matrix(true_labels, predicted_labels))
+
+    return accuracy
+
+
+def calculate_protein_accuracy(protein_predictions, all_peptides):
+    """
+    **NEW FUNCTION** - Calculate protein-level accuracy metrics.
+    """
+    from sklearn.metrics import accuracy_score, classification_report
+
+    # Get true protein labels (if ANY peptide in protein has label=1, protein is positive)
+    protein_groups = {}
+    for peptide in all_peptides:
+        protein_id = peptide["protein_id"]
+        if protein_id not in protein_groups:
+            protein_groups[protein_id] = []
+        protein_groups[protein_id].append(peptide["label"])
+
+    true_protein_labels = []
+    predicted_protein_labels = []
+    protein_ids = []
+
+    for protein_id in protein_groups.keys():
+        if protein_id in protein_predictions:
+            # True label: 1 if any peptide is 1, 0 if any peptide is 0, else -1
+            peptide_labels = protein_groups[protein_id]
+            if 1 in peptide_labels:
+                true_label = 1
+            elif 0 in peptide_labels:
+                true_label = 0
+            else:
+                true_label = -1
+
+            true_protein_labels.append(true_label)
+            predicted_protein_labels.append(protein_predictions[protein_id]["predicted_label"])
+            protein_ids.append(protein_id)
+
+    accuracy = accuracy_score(true_protein_labels, predicted_protein_labels)
+
+    print(f"\n📊 PROTEIN-LEVEL ACCURACY:")
+    print(f"Overall Accuracy: {accuracy:.3f}")
+    print(f"Classification Report:")
+    print(classification_report(true_protein_labels, predicted_protein_labels,
+                                target_names=['Negative', 'Uncertain', 'Positive']))
+
+    return accuracy
 
 # Example usage:
 if __name__ == "__main__":
@@ -210,21 +364,27 @@ if __name__ == "__main__":
     print(f"\n📊 RESULTS:")
     print(f"Processed {len(peptide_predictions)} peptides from {len(protein_predictions)} proteins")
 
-    # Example peptide prediction
+    # Calculate accuracies
+    peptide_accuracy = calculate_peptide_accuracy(peptide_predictions)
+    protein_accuracy = calculate_protein_accuracy(protein_predictions, all_peptides)
+
+    # Get NES positional information
+    nes_positions = get_nes_positional_info(peptide_predictions, protein_predictions)
+
+    # Print example results
     print(f"\nExample peptide prediction:")
     p = peptide_predictions[0]
     print(f"Protein ID: {p['protein_id']}, Score: {p['prediction_score']:.3f}, Predicted: {p['predicted_label']}")
 
-    # Example protein prediction
     print(f"\nExample protein predictions:")
     for protein_id, pred in list(protein_predictions.items())[:2]:
-        print(f"Protein {protein_id}: {pred['predicted_label']} "
-              f"({pred['num_positive_peptides']}/{pred['num_peptides']} peptides positive)")
+        print(f"Protein {protein_id}: Label={pred['predicted_label']} "
+              f"({pred['num_positive_peptides']} pos, {pred['num_uncertain_peptides']} unc, {pred['num_negative_peptides']} neg)")
 
-    # OPTION 2: Step-by-step (if you need more control)
-    # Step 1: Get embeddings
-    # peptide_embeddings = get_peptide_embeddings_with_protein_info(all_peptides)
-    # Step 2: Get predictions
-    # peptide_predictions = get_peptide_predictions(peptide_embeddings, trained_model)
-    # Step 3: Aggregate to proteins
-    # protein_predictions = get_protein_level_predictions(peptide_predictions)
+    # Print NES positions for positive proteins
+    if nes_positions:
+        print(f"\nNES Positions in positive proteins:")
+        for protein_id, pos_info in list(nes_positions.items())[:2]:
+            print(f"Protein {protein_id}: {pos_info['num_nes_regions']} NES regions")
+            for region in pos_info['nes_regions']:
+                print(f"  - Position {region['start_pos']}-{region['end_pos']} (score: {region['score']:.3f})")
