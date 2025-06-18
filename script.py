@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 from esm_embeddings import get_esm_embeddings, get_esm_model
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-from tqdm import tqdm  # Add this line after other imports
+from tqdm import tqdm  
 
 UPPER_THRESHOLD = 1  # default upper threshold for positive predictions
 LOWER_THRESHOLD = -1  # default lower threshold for negative predictions
