@@ -12,9 +12,11 @@ import requests
         - "Low abundant cargo"    → 1 (NES-positive, but low expression levels)
         - "Cargo B"               → 0 (Unclear/ambiguous cargo classification)
         - "Ambiguous"             → 0 (Uncertain or inconsistent evidence)
-        - "NTR"                   → 0 (Nuclear transport receptor, not cargo)
-        - "NUP"                   → 0 (Nucleoporin protein, structural, not cargo)
-        - "Non binder"            → 0 (Validated lack of Crm1 binding)
+        - "NTR"                   → -1 (Nuclear transport receptor, not cargo)
+        - "NUP"                   → -1 (Nucleoporin protein, structural, not cargo)
+        - "Non binder"            → -1 (Validated lack of Crm1 binding)
+        - "CRM1 Cofactor"       → -1 (Cofactor, not considered cargo)
+        - "NPC"                 → -1 (Nuclear pore complex component, not cargo)
 """
 
 LABEL_TO_BINARY = {
@@ -176,6 +178,17 @@ def generate_peptides_from_csv(csv_path, window_size=22):
 
     return all_peptides
 
-# peptides = generate_peptides_from_csv("data_classified.csv")
-# print(len(peptides))
+
+def main():
+    input_file = "deep_proteomics_data_3.csv"
+    enriched_file = "data.csv"
+    classified_file = "data_classified.csv"
+
+    enrich_csv_with_sequences(input_file, enriched_file)
+    relabel_data(enriched_file, classified_file)
+    peptides = generate_peptides_from_csv(classified_file)
+
+    print(f"Generated {len(peptides)} peptides.")
+    return peptides
+
 
