@@ -21,3 +21,22 @@ A central component of our approach was the iterative improvement of the model. 
 Ultimately, our goal is to apply this optimized model to a much larger dataset of 20,000 proteins, determining whether or not each contains NES elements. The entire workflow is designed around a cycle of evaluation and learning, which provides a balanced process of testing, correction, and progression toward increasingly reliable predictions.)
 
 
+To address the challenge of identifying NES-containing proteins at scale, we developed a structured and iterative workflow grounded in evaluation and continuous improvement.
+
+We began with a dataset of approximately 4,000 human proteins—a substantial volume, particularly given the need to segment each protein into overlapping peptides. In the preprocessing stage, each protein sequence was divided into sliding windows of 22 amino acids, generating a comprehensive set of candidate peptides. These peptides were then labeled according to their known NES status, based on external annotations.
+
+Following this, we proceeded to model evaluation. Our pipeline involved:
+
+Segmenting proteins into peptides,
+
+Generating embeddings for each peptide using a pre-trained protein language model (e.g., ESM),
+
+Applying a scoring function and a tunable threshold to predict NES presence,
+
+Calculating classification performance metrics, including accuracy and AUC.
+
+An important aspect of our approach was the refinement of the dataset between evaluation cycles. By carefully integrating high-quality negative examples, we aimed to improve the model's ability to distinguish NES-containing peptides from similar non-functional sequences. This feedback loop—evaluating, adjusting, and retraining—allowed us to steadily improve prediction quality.
+
+Ultimately, this pipeline is designed to scale up to a larger set of ~20,000 human proteins. Our long-term objective is to accurately classify each protein based on its potential to contain NES elements. The combination of dynamic evaluation, model fine-tuning, and data-driven learning positions our workflow as a robust foundation for large-scale NES prediction.
+
+
