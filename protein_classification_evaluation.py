@@ -117,7 +117,7 @@ def get_peptide_predictions_efficient(peptide_embeddings, trained_model, hdf5_fi
 
     # Find optimal thresholds using all scores
     true_labels = [p["label"] for p in peptide_embeddings]
-    THRESHOLD = 0.8
+    THRESHOLD = 0.65
 
     # Add predictions to metadata (NO embeddings stored!)
     for i, (score, p) in enumerate(zip(all_scores, peptide_embeddings)):
