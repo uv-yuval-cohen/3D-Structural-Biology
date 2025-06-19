@@ -208,7 +208,31 @@ def extract_mitochondrial_proteins_to_csv(fasta_path="human_proteins.fasta", out
     print(f"Saved {len(df)} mitochondrial proteins to {output_csv}")
 
 
-extract_mitochondrial_proteins_to_csv()
+def create_negative_peptides_from_mito(input_csv="mitochondrial_proteins.csv",
+                                       output_csv="mitochondrial_negatives.csv",
+                                       peptide_length=22):
+    """
+    Extracts the first 22 amino acids from each sequence in the mitochondrial_proteins.csv
+    and saves them as a single-column CSV file.
+
+    Args:
+        input_csv (str): Path to input CSV with a 'sequence' column.
+        output_csv (str): Path to save the resulting peptide list.
+        peptide_length (int): Length of peptides to extract from start of sequence.
+    """
+    df = pd.read_csv(input_csv)
+    negatives = []
+
+    for seq in df["sequence"]:
+        if isinstance(seq, str) and len(seq) >= peptide_length:
+            negatives.append(seq[:peptide_length])
+
+    result_df = pd.DataFrame(negatives, columns=["peptide"])
+    result_df.to_csv(output_csv, index=False)
+    print(f"Saved {len(result_df)} negative peptides to {output_csv}")
+
+create_negative_peptides_from_mito("mitochondrial_proteins.csv", "mitochondrial_negatives.csv")
+
 
 def main():
     extract_mitochondrial_proteins_to_csv()

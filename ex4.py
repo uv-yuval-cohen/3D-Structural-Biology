@@ -36,7 +36,6 @@ def simple_score(p_train, n_train, p_test, n_test):
 
 
 if __name__ == '__main__':
-
     # TODO: play with these parameters
     chosen_embedding_size = 2560  # ESM embedding dim (320-5120)
     chosen_embedding_layer = 9  # which transformer layer to take
