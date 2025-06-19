@@ -16,7 +16,6 @@ This pipeline processes protein sequences to identify Nuclear Export Signals (NE
 ### Peptide Classification
 - Uses ESM-2 protein language model embeddings (2560-dimensional)
 - Binary classifier: SimpleDenseNet with 128 hidden units and 0.2 dropout
-- Fixed threshold of 0.6 for binary decisions
 
 ### Protein Aggregation Rule
 **IF** any peptide from protein has prediction = 1 **THEN** protein = 1 **ELSE** protein = 0
