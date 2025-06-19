@@ -9,3 +9,15 @@ by their true label (nes containment), we moved on to the evaluation. Our strate
 proteins, dividing into peptides, embedding them, getting a score and a prediction using a changing threshold and finally getting a classification accuracy. with that the goalmis to progress 
 the model, involving a well connected new data of negative examples to train the data better, and then improving our accuracy, everything towards the final goal of predicting the 
 20K proteins, whether they contain nes or not. our workflow is based on evaluation and learning into progression, giving us a good balance of testing and correcting.
+(chatgpt answer, needs review : Methods
+In this project, we set out to develop a robust and systematic workflow for achieving our goal of accurately classifying NES-containing proteins. Throughout the process, we encountered several challenges, particularly due to the scale and complexity of the data. To address these, we designed a step-by-step approach that allowed us to iteratively improve our model.
+We began by working with a dataset of 4,000 proteins — a substantial volume, especially considering the need to segment each protein into peptides. The initial stage involved comprehensive pre-processing of the data: extracting peptides corresponding to each protein, and accurately labeling them according to their true classification (presence or absence of NES elements).
+Once the dataset was prepared, we moved into the evaluation phase. Our strategy focused on advancing the model through systematic evaluation of its predictive accuracy. This involved processing the dataset through several key stages:
+dividing proteins into peptides,
+generating embeddings for each peptide,
+applying a scoring mechanism with a dynamic threshold to predict class labels,
+and computing the overall classification accuracy.
+A central component of our approach was the iterative improvement of the model. After each evaluation cycle, we refined the training data — particularly by introducing carefully curated negative examples — to ensure that the dataset became more balanced and informative. This continual refinement aimed to enhance the model’s ability to generalize and to increase predictive accuracy.
+Ultimately, our goal is to apply this optimized model to a much larger dataset of 20,000 proteins, determining whether or not each contains NES elements. The entire workflow is designed around a cycle of evaluation and learning, which provides a balanced process of testing, correction, and progression toward increasingly reliable predictions.)
+
+
