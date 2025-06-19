@@ -1,6 +1,6 @@
 import pandas as pd
 import requests
-
+from Bio import SeqIO
 
 """Classification Guide for Experimental Labels:
 
@@ -179,16 +179,49 @@ def generate_peptides_from_csv(csv_path, window_size=22):
     return all_peptides
 
 
+def extract_mitochondrial_proteins_to_csv(fasta_path="human_proteins.fasta", output_csv="mitochondrial_proteins.csv"):
+    """
+    Extracts mitochondrial proteins from a FASTA file and saves them to a CSV file.
+
+    Criteria:
+        - 'mitochondrial' (case-insensitive) must appear in the FASTA description line.
+
+    Output CSV columns:
+        - protein_id
+        - description
+        - sequence
+    """
+    records = []
+    for record in SeqIO.parse(fasta_path, "fasta"):
+        if "mitochondrial" in record.description.lower():
+            # Extract UniProt ID if possible
+            parts = record.id.split("|")
+            protein_id = parts[1] if len(parts) > 1 else record.id
+            records.append({
+                "protein_id": protein_id,
+                "description": record.description,
+                "sequence": str(record.seq)
+            })
+
+    df = pd.DataFrame(records)
+    df.to_csv(output_csv, index=False)
+    print(f"Saved {len(df)} mitochondrial proteins to {output_csv}")
+
+
+extract_mitochondrial_proteins_to_csv()
+
 def main():
-    input_file = "deep_proteomics_data_3.csv"
-    enriched_file = "data.csv"
-    classified_file = "data_classified.csv"
+    extract_mitochondrial_proteins_to_csv()
 
-    enrich_csv_with_sequences(input_file, enriched_file)
-    relabel_data(enriched_file, classified_file)
-    peptides = generate_peptides_from_csv(classified_file)
-
-    print(f"Generated {len(peptides)} peptides.")
-    return peptides
+    # input_file = "deep_proteomics_data_3.csv"
+    # enriched_file = "data.csv"
+    # classified_file = "data_classified.csv"
+    #
+    # enrich_csv_with_sequences(input_file, enriched_file)
+    # relabel_data(enriched_file, classified_file)
+    # peptides = generate_peptides_from_csv(classified_file)
+    #
+    # print(f"Generated {len(peptides)} peptides.")
+    # return peptides
 
 
