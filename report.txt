@@ -1,0 +1,11 @@
+headline:
+summary:
+intro:
+
+methods:
+we go on to talk about methods leading our project.encountaring such problem, we wanted to develop our way into completing our goal. first we started with the data set of 4000 protein, 
+a substantaly large amount, especially when a seperation into peptides is needed. After pre processing the data, extracting the peptides in relation to the proteins, and classifing them 
+by their true label (nes containment), we moved on to the evaluation. Our strategy was to advance our model with the evaluation of the data acccuracy. processing a substantial amount of the 
+proteins, dividing into peptides, embedding them, getting a score and a prediction using a changing threshold and finally getting a classification accuracy. with that the goalmis to progress 
+the model, involving a well connected new data of negative examples to train the data better, and then improving our accuracy, everything towards the final goal of predicting the 
+20K proteins, whether they contain nes or not. our workflow is based on evaluation and learning into progression, giving us a good balance of testing and correcting.
